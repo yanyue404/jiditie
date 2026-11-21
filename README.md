@@ -2,7 +2,7 @@
 
 一款以广州地铁 3 号线早高峰为主题的轻量 2D 网页游戏。玩家需要观察上下车人流、寻找空隙，并通过“扒拉”改变局部人群结构，在车门关闭前成功进入车厢。
 
-项目根据 [`prd.md`](./prd.md) 开发，采用纯前端实现，无需账号、后端服务或数据库。
+按 [`docs/prd.md`](./docs/prd.md) 开发：**无需登录、玩法纯前端可单机**。可选 Cloudflare D1「氛围灯」全站聚合统计（进页 / 唯一通勤者 / 胜负等）；API 不可用时静默降级，不影响开局。文档索引见 [`docs/README.md`](./docs/README.md)。
 
 ## 游戏特色
 
@@ -15,6 +15,7 @@
 - 通勤时间、体力、文明度、效率和星级评价
 - 随机客流事件、冲刺客和换乘站 Boss
 - 成就、动态称号、最佳成绩与本地存档
+- 可选全站氛围灯（首页门厅指标、结算车厢指标）
 - PC、手机竖屏、刘海屏及横屏布局适配
 - 基于 Web Audio API 的程序化音效
 
@@ -68,18 +69,17 @@
 
 ## 技术栈
 
-- Vite
-- TypeScript
-- Canvas 2D
-- Web Audio API
-- 自研人群 AI 与空间哈希碰撞系统
-- localStorage 本地存档
+- Vite + TypeScript + Canvas 2D + Web Audio API
+- 自研人群 AI 与空间哈希碰撞
+- `localStorage` 个人存档（与全站统计各算各的）
+- 可选：Cloudflare Pages Functions + D1（REST / `sendBeacon`，无 Durable Object / WebSocket）
 
 ## 环境要求
 
 - Node.js 20 或更高版本
 - npm 10 或更高版本
 - Chrome、Edge、Safari 或 Android Chrome 等现代浏览器
+- 本地联调氛围灯时需要 Wrangler（已在 `devDependencies`）
 
 ## 安装依赖
 
@@ -89,67 +89,97 @@
 https://registry.npmmirror.com
 ```
 
-安装依赖：
-
 ```bash
 npm install
 ```
 
 ## 本地开发
 
+### 只玩前端（无氛围灯）
+
 ```bash
 npm run dev
 ```
-
-默认访问地址：
 
 ```text
 http://localhost:5173
 ```
 
-开发服务器会监听局域网地址，可使用同一网络中的手机访问电脑显示的 IP 地址进行真机测试。
+无 `/api`，氛围灯数字不会出现（静默）。
 
-## 生产构建
+### 带 D1 氛围灯
+
+```bash
+npm run d1:migrate:local   # 首次或迁移变更后
+npm run pages              # build + wrangler pages dev
+```
+
+```text
+http://localhost:8788
+```
+
+首页「开始上班」上方会出现门厅指标；结算页显示车厢全局数。
+
+## 生产构建与部署
+
+正式域名：[https://jiditie.pages.dev](https://jiditie.pages.dev)（哈希子域是某次部署快照，分享用正式域名即可）。
+
+**只需做一次（已完成可跳过）：**
+
+```bash
+npx wrangler d1 create jiditie-stats   # 把 database_id 写入 wrangler.toml
+npm run d1:migrate                     # 远端建表；仅当 migrations/ 有新文件时再跑
+```
+
+Dashboard 确认 Pages 绑定：`DB` → `jiditie-stats`。
+
+**以后每次发版（改了前端或 `functions/`）：**
 
 ```bash
 npm run build
+npx wrangler pages deploy dist
 ```
 
-构建文件会输出到 `dist/` 目录。
+没改 SQL 迁移就不用再 `d1:migrate`；没改库绑定就不用再 create。
 
-本地预览生产构建：
+## API（氛围灯）
 
-```bash
-npm run preview
-```
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| `GET` | `/api/stats` | 全局 + 今日活跃 |
+| `POST` | `/api/visit` | `{ uid }` 进页；同日同 uid 今日活跃最多 +1 |
+| `POST` | `/api/round` | 本局增量 `{ wins, fails, pulls, civilWins }`；关页可 beacon |
+
+防刷：同源 Origin 校验 + 按 IP 滑动窗口限速。个人成就仍只信本地 `line3-save`。
 
 ## 项目结构
 
 ```text
 .
 ├─ src/
-│  ├─ main.ts         # 游戏状态、关卡、AI、碰撞、输入与渲染
-│  ├─ style.css       # 基础界面与游戏 HUD
-│  ├─ campaign.css    # 线路地图、成就和称号界面
-│  └─ mobile.css      # 手机竖屏、横屏和安全区适配
+│  ├─ main.ts           # 游戏主逻辑
+│  ├─ atmosphere.ts     # 氛围灯客户端（visit / round / 展示）
+│  ├─ style.css
+│  ├─ campaign.css
+│  └─ mobile.css
+├─ functions/           # Pages Functions（见 functions/README.md）
+├─ migrations/          # D1 迁移（见 migrations/README.md）
+├─ docs/                # PRD / glossary / D1 说明 / ADR
+├─ wrangler.toml
 ├─ index.html
-├─ prd.md
-├─ package.json
-├─ tsconfig.json
-└─ .npmrc
+└─ package.json
 ```
 
 ## 本地存档
 
 游戏使用 `localStorage` 保存：
 
-- 已解锁车站
-- 各站最佳成绩
-- 累计成功与失败次数
-- 扒拉次数和文明通关次数
+- 已解锁车站、各站最佳成绩
+- 累计成功与失败、扒拉与文明通关
 - 成就与当前称号
+- 氛围灯用的匿名通勤者 `line3-uid`（非账号）
 
-清除浏览器站点数据即可重置进度。
+清除浏览器站点数据即可重置进度与设备 uid。
 
 ## 开源说明
 

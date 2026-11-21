@@ -2,6 +2,11 @@ node_modules/
 dist/
 .firecrawl/
 
+# Cloudflare / Wrangler 本地态
+.wrangler/
+.dev.vars
+.dev.vars.*
+
 # 本地环境与日志
 .env
 .env.*
