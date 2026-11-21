@@ -1,0 +1,9 @@
+name = "jiditie"
+compatibility_date = "2025-11-21"
+pages_build_output_dir = "dist"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "jiditie-stats"
+database_id = "e5264fdc-d88b-45aa-b736-a2b8c4b816c3"
+migrations_dir = "migrations"
